@@ -1,0 +1,42 @@
+<svg width="680" height="320" viewBox="0 0 680 320" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>Zottin Logo</title>
+  <desc>The Zottin AI logo featuring a stylized Z mark with signal arc and bold wordmark</desc>
+
+  <defs>
+    <linearGradient id="zGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00D4FF"/>
+      <stop offset="100%" stop-color="#3B28CC"/>
+    </linearGradient>
+    <linearGradient id="arcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00D4FF"/>
+      <stop offset="100%" stop-color="#7B5CFA"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Z Mark: top bar -->
+  <line x1="148" y1="88" x2="232" y2="88" stroke="url(#zGrad)" stroke-width="12" stroke-linecap="round"/>
+  <!-- Diagonal -->
+  <line x1="232" y1="88" x2="148" y2="230" stroke="url(#zGrad)" stroke-width="12" stroke-linecap="round"/>
+  <!-- Bottom bar -->
+  <line x1="148" y1="230" x2="232" y2="230" stroke="url(#zGrad)" stroke-width="12" stroke-linecap="round"/>
+  <!-- AI signal arc -->
+  <path d="M 155 148 Q 190 120 225 148" fill="none" stroke="url(#arcGrad)" stroke-width="4" stroke-linecap="round" filter="url(#glow)"/>
+  <!-- Signal endpoint dots -->
+  <circle cx="155" cy="148" r="4" fill="#00D4FF" filter="url(#glow)"/>
+  <circle cx="225" cy="148" r="4" fill="#7B5CFA" filter="url(#glow)"/>
+  <!-- Apex dot -->
+  <circle cx="190" cy="126" r="3" fill="#FFFFFF" fill-opacity="0.9" filter="url(#glow)"/>
+
+  <!-- Wordmark -->
+  <text x="270" y="196" font-family="'Arial', 'Helvetica Neue', sans-serif" font-size="88" font-weight="700" letter-spacing="6" fill="url(#zGrad)">ZOTTIN</text>
+
+  <!-- Tagline -->
+  <text x="272" y="242" font-family="'Arial', 'Helvetica Neue', sans-serif" font-size="15" font-weight="400" letter-spacing="5" fill="#7B5CFA" fill-opacity="0.85">INTELLIGENCE REDEFINED</text>
+</svg>
