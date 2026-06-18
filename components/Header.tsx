@@ -20,7 +20,6 @@ const Header = () => {
 
         <div className="flex items-center gap-5">
           <Show when="signed-in">
-            <UserButton />
             <Link
               href={"/projects"}
               className="text-[13px] font-medium text-white/40 transition-colors hover:text-white/80"
@@ -31,6 +30,8 @@ const Header = () => {
             <span className="inline-flex h-8 items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 text-xs text-white/70">
               <Zap className="h-3 w-3 fill-white/70" />3 / 40 credits
             </span>
+            <UserButton />
+
           </Show>
 
           <Show when="signed-out">
