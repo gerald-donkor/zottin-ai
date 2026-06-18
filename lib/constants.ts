@@ -37,7 +37,7 @@ export const PRICING_PLANS = [
     description: "For developers who build regularly.",
     price: 9,
     featured: true,
-    planId: "cplan_3DvxGsOeYA5bpJzGWPi8o7wScRD",
+    planId: "cplan_3FJLZ1hKasiOfOlcHqk1Kq8UMRy",
     active: false,
     features: [
       "50 generations / month",
@@ -52,7 +52,7 @@ export const PRICING_PLANS = [
     description: "For power users who ship fast.",
     price: 29,
     featured: false,
-    planId: "cplan_3DvxTfywwB0NyQ1iqANclgNqlq8",
+    planId: "cplan_3FJMAkLd7tzd5dt9jVqKYC0x1MW",
     active: false,
     features: [
       "150 generations / month",
