@@ -19,7 +19,7 @@ import {
 } from "@/components/reusables";
 
 export default function Home() {
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, has } = useAuth();
   const router = useRouter();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 

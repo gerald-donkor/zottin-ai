@@ -6,6 +6,7 @@ import { Button } from "./ui/button";
 import { PricingModal } from "./PricingModal";
 import { PLANS } from "@/lib/constants";
 import { Plan } from "@/types/plans";
+import { checkUser } from "@/lib/checkUser"; // wherever your checkUser lives
 
 const Header = async () => {
   const user = await checkUser();
