@@ -34,9 +34,9 @@ export const aj = arcjet({
     // ── Sensitive information ──────────────────────────────────────────────
     // Prevents users from accidentally leaking secrets into Gemini prompts
     // e.g. pasting a .env file with DB credentials or API keys.
-    // sensitiveInfo({
-    //   mode: "LIVE",
-    //   deny: ["CREDIT_CARD_NUMBER", "API_KEY", "AWS_SECRET_KEY"],
-    // }),
+    sensitiveInfo({
+      mode: "LIVE",
+      deny: ["CREDIT_CARD_NUMBER", "API_KEY", "AWS_SECRET_KEY"],
+    }),
   ],
 });
