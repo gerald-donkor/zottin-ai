@@ -1,0 +1,35 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>Zottin Favicon</title>
+  <desc>Zottin Z mark favicon — no background</desc>
+
+  <defs>
+    <linearGradient id="zg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00D4FF"/>
+      <stop offset="100%" stop-color="#3B28CC"/>
+    </linearGradient>
+    <linearGradient id="ag" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00D4FF"/>
+      <stop offset="100%" stop-color="#7B5CFA"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="1.2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Z top bar -->
+  <line x1="10" y1="10" x2="54" y2="10" stroke="url(#zg)" stroke-width="7" stroke-linecap="round"/>
+  <!-- Z diagonal -->
+  <line x1="54" y1="10" x2="10" y2="54" stroke="url(#zg)" stroke-width="7" stroke-linecap="round"/>
+  <!-- Z bottom bar -->
+  <line x1="10" y1="54" x2="54" y2="54" stroke="url(#zg)" stroke-width="7" stroke-linecap="round"/>
+  <!-- Signal arc -->
+  <path d="M 14 32 Q 32 19 50 32" fill="none" stroke="url(#ag)" stroke-width="2.5" stroke-linecap="round" filter="url(#glow)"/>
+  <!-- Dots -->
+  <circle cx="14" cy="32" r="2.5" fill="#00D4FF" filter="url(#glow)"/>
+  <circle cx="50" cy="32" r="2.5" fill="#7B5CFA" filter="url(#glow)"/>
+  <circle cx="32" cy="21" r="2" fill="#FFFFFF" fill-opacity="0.95" filter="url(#glow)"/>
+</svg>
