@@ -64,11 +64,9 @@ export function ChatPanel({
   const hasAutoSubmittedRef = useRef(false);
   const noCredits = credits <= 0;
 
-  // The last message is the live-streaming assistant placeholder during improve
   const lastMsg = messages[messages.length - 1];
   const isStreamingAssistant = isImproving && lastMsg?.role === "assistant";
 
-  // Auto-resize textarea
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -76,7 +74,6 @@ export function ChatPanel({
     el.style.height = Math.min(el.scrollHeight, 160) + "px";
   }, [input]);
 
-  // Auto-scroll on new messages or streaming updates
   useEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
@@ -169,7 +166,6 @@ export function ChatPanel({
         <div className="space-y-4">
           {messages.map((msg, i) => {
             const isLast = i === messages.length - 1;
-            // This is the live-streaming assistant bubble during improve
             const isLiveStream = isLast && isStreamingAssistant;
 
             return (
@@ -215,7 +211,6 @@ export function ChatPanel({
                     />
                     <div className="min-w-0 rounded-2xl rounded-tl-sm bg-white/5 px-3.5 py-2.5">
                       {isLiveStream && !msg.content ? (
-                        // Empty placeholder — show Cline thinking indicator
                         <div className="flex items-center gap-2">
                           <Wand2 className="h-3 w-3 shrink-0 text-blue-400/60 animate-pulse" />
                           <span className="text-[12px] text-white/30 animate-pulse">
@@ -223,8 +218,6 @@ export function ChatPanel({
                           </span>
                         </div>
                       ) : isLiveStream && msg.content ? (
-                        // Streaming thinking text — show raw (not markdown)
-                        // with a blinking cursor at the end
                         <div>
                           <div className="mb-1.5 flex items-center gap-1.5">
                             <Wand2 className="h-3 w-3 shrink-0 text-blue-400/60" />
@@ -238,7 +231,6 @@ export function ChatPanel({
                           </p>
                         </div>
                       ) : (
-                        // Normal completed assistant message
                         <div className="prose prose-sm prose-invert max-w-none wrap-break-word text-[13px] leading-relaxed text-white/70 [&_code]:rounded [&_code]:bg-white/10 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-blue-300/80 [&_code]:text-xs [&_code]:break-all [&_li]:my-0.5 [&_p]:my-1 [&_pre]:overflow-x-auto! [&_pre]:whitespace-pre-wrap! [&_ul]:my-1">
                           <ReactMarkdown>{msg.content}</ReactMarkdown>
                         </div>
@@ -250,7 +242,7 @@ export function ChatPanel({
             );
           })}
 
-          {/* Live status steps — only shown during normal generation */}
+          {/* Live status steps */}
           {isGenerating && (
             <div className="flex items-start gap-2">
               <Image
@@ -328,6 +320,7 @@ export function ChatPanel({
               className="h-16 w-16 rounded-lg object-cover"
             />
             <button
+              aria-label="Remove image"
               onClick={() => setPendingImageUrl(null)}
               className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-black/80 text-white/60 hover:text-white"
             >
@@ -352,6 +345,7 @@ export function ChatPanel({
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={isGenerating || isImproving || noCredits}
+            aria-label="Chat input"
             placeholder={
               noCredits
                 ? "Upgrade to keep building…"
@@ -368,6 +362,7 @@ export function ChatPanel({
 
           <div className="flex items-center justify-between px-2 pb-2">
             <Button
+              aria-label="Attach image"
               variant="ghost"
               size="icon"
               onClick={() => fileRef.current?.click()}
@@ -385,13 +380,14 @@ export function ChatPanel({
               ref={fileRef}
               type="file"
               accept="image/*"
+              aria-label="Upload image"
               className="hidden"
               onChange={handleFileChange}
             />
 
-            {/* Stop button — shown while generating or improving */}
             {isGenerating || isImproving ? (
               <Button
+                aria-label="Stop generation"
                 size="icon"
                 onClick={onStop}
                 className="h-7 w-7 rounded-lg bg-white/10 text-white/60 hover:bg-white/20 hover:text-white active:scale-95 transition-all"
@@ -400,6 +396,7 @@ export function ChatPanel({
               </Button>
             ) : (
               <Button
+                aria-label="Send message"
                 size="icon"
                 onClick={handleSubmit}
                 disabled={!canSubmit}
