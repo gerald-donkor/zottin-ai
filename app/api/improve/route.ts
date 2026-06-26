@@ -4,13 +4,31 @@ import { Agent, createTool } from "@cline/sdk";
 import { z } from "zod";
 import { db } from "@/lib/prisma";
 import { CREDIT_COST_PER_GENERATION } from "@/lib/constants";
-import type { FileData } from "@/types/workspace";
+import type { FileData, Message } from "@/types/workspace";
+import {
+  getFrameworkLabel,
+  isAppFramework,
+  type AppFramework,
+} from "@/lib/frameworks";
 
 // ─── SSE helper ───────────────────────────────────────────────────────────────
 
 function sseEvent(type: string, payload: object): string {
   return `data: ${JSON.stringify({ type, ...payload })}\n\n`;
 }
+
+const IMPROVE_RULES: Record<AppFramework, string> = {
+  react:
+    "Use React functional components, JavaScript, Tailwind, and /App.js as the entry point.",
+  nextjs:
+    "Use the Next.js Pages Router with JavaScript, /pages/index.js, and CSS or CSS modules.",
+  expo:
+    "Use Expo, React Native primitives, JavaScript, StyleSheet, and /App.js. Do not use DOM elements or CSS.",
+  vue: "Use Vue 3, JavaScript, Vite, and /src/App.vue.",
+  svelte: "Use Svelte, JavaScript, Vite, and /src/App.svelte.",
+  vanilla:
+    "Use semantic HTML, modern CSS, browser JavaScript, and the existing Vite file structure.",
+};
 
 // ─── Route ────────────────────────────────────────────────────────────────────
 
@@ -20,11 +38,10 @@ export async function POST(request: NextRequest) {
     return Response.json({ message: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
-  const { userId, workspaceId, userRequest, fileData } = body as {
+  const { userId, workspaceId, userRequest } = body as {
     userId: string;
     workspaceId: string;
     userRequest: string; // what the user wants improved
-    fileData: FileData;
   };
 
   // ── Auth + credit check ────────────────────────────────────────────────────
@@ -43,6 +60,22 @@ export async function POST(request: NextRequest) {
 
   if (user.credits < CREDIT_COST_PER_GENERATION)
     return Response.json({ message: "Insufficient credits" }, { status: 402 });
+
+  const workspace = await db.workspace.findFirst({
+    where: { id: workspaceId, userId },
+    select: { fileData: true, messages: true },
+  });
+  if (!workspace || !workspace.fileData) {
+    return Response.json({ message: "Workspace not found" }, { status: 404 });
+  }
+
+  const fileData = workspace.fileData as unknown as FileData;
+  if (!fileData.files || !fileData.dependencies) {
+    return Response.json({ message: "Invalid workspace data" }, { status: 400 });
+  }
+  const framework: AppFramework = isAppFramework(fileData.framework)
+    ? fileData.framework
+    : "react";
 
   // ── Build the agent ────────────────────────────────────────────────────────
 
@@ -121,11 +154,11 @@ export async function POST(request: NextRequest) {
         modelId: "gemini-3.5-flash",
         apiKey: process.env.GEMINI_API_KEY!,
         maxIterations: 8,
-        systemPrompt: `You are an expert React developer improving a live browser preview app.
+        systemPrompt: `You are an expert ${getFrameworkLabel(framework)} developer improving an existing app.
 
-The app uses React (functional components), Tailwind CSS for styling, and runs in Sandpack.
-You CANNOT use TypeScript, CSS modules, or real npm install — only what's already available.
-Available packages: react, react-dom, tailwindcss (CDN), lucide-react, recharts, react-router-dom, framer-motion, date-fns, zod, react-hook-form.
+${IMPROVE_RULES[framework]}
+Do not use TypeScript or switch frameworks. The app runs in Sandpack for web frameworks; Expo is edited and exported as a native project.
+Use only dependencies already present unless the requested change can be implemented without adding packages.
 
 Here are the current files:
 
@@ -140,8 +173,8 @@ WORKFLOW:
 RULES:
 - Always write complete file contents — never partial snippets.
 - Keep all existing functionality unless asked to remove it.
-- The entry point is always /App.js with a default export.
-- All imports must reference files you've updated or packages in the available list above.`,
+- Preserve the framework's existing entry point and conventions.
+- All imports must reference existing files or declared dependencies.`,
         tools: [updateFileTool, doneImprovingTool],
         // Auto-approve both tools — no human-in-the-loop needed in this context
         toolPolicies: {
@@ -193,23 +226,47 @@ RULES:
           files: patchedFiles,
           dependencies: fileData.dependencies,
           title: fileData.title,
+          framework,
         };
 
-        await db.$transaction([
+        const storedMessages = Array.isArray(workspace.messages)
+          ? (workspace.messages as unknown as Message[])
+          : [];
+        const updatedMessages: Message[] = [
+          ...storedMessages,
+          { role: "user", content: userRequest },
+          {
+            role: "assistant",
+            content: finalSummary || result.outputText || "Improvement complete.",
+          },
+        ];
+        const newVersionId = crypto.randomUUID();
+
+        const [, updatedUser] = await db.$transaction([
           db.workspace.update({
             where: { id: workspaceId, userId },
-            data: { fileData: newFileData as never },
+            data: {
+              fileData: newFileData as never,
+              messages: updatedMessages as never,
+              versions: {
+                create: {
+                  id: newVersionId,
+                  fileData: newFileData as never,
+                  source: "improvement",
+                  summary: finalSummary || result.outputText,
+                },
+              },
+            },
           }),
           db.user.update({
-            where: { id: userId },
+            where: {
+              id: userId,
+              credits: { gte: CREDIT_COST_PER_GENERATION },
+            },
             data: { credits: { decrement: CREDIT_COST_PER_GENERATION } },
+            select: { credits: true },
           }),
         ]);
-
-        const updatedUser = await db.user.findUnique({
-          where: { id: userId },
-          select: { credits: true },
-        });
 
         // ── Final done event ──────────────────────────────────────────────
 
@@ -217,8 +274,8 @@ RULES:
           sseEvent("done", {
             fileData: newFileData,
             summary: finalSummary || result.outputText,
-            creditsRemaining:
-              updatedUser?.credits ?? user.credits - CREDIT_COST_PER_GENERATION,
+            currentVersionId: newVersionId,
+            creditsRemaining: updatedUser.credits,
           })
         );
       } catch (err) {

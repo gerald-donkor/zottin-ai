@@ -1,14 +1,15 @@
 import { WorkspaceClient } from "@/components/WorkspaceClient";
 import { getWorkspaceUser, getWorkspaceById } from "@/actions/workspace";
+import { isAppFramework } from "@/lib/frameworks";
 
 interface WorkspacePageProps {
-  searchParams: Promise<{ prompt?: string; id?: string }>;
+  searchParams: Promise<{ prompt?: string; id?: string; framework?: string }>;
 }
 
 export default async function WorkspacePage({
   searchParams,
 }: WorkspacePageProps) {
-  const { prompt, id } = await searchParams;
+  const { prompt, id, framework } = await searchParams;
 
   const user = await getWorkspaceUser();
 
@@ -24,6 +25,7 @@ export default async function WorkspacePage({
       userCredits={user.credits}
       userId={user.id}
       userPlan={user.plan}
+      initialFramework={isAppFramework(framework) ? framework : "react"}
     />
   );
 }

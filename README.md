@@ -1,5 +1,18 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## GitHub integration
+
+Repository import uses the GitHub OAuth token managed by Clerk:
+
+1. In the Clerk Dashboard, open **SSO connections** and enable **GitHub**.
+2. Use custom GitHub OAuth credentials for production.
+3. Add the `repo` OAuth scope if users should be able to import private repositories.
+4. Users can sign in with GitHub or connect GitHub from their Clerk account profile.
+
+Once connected, the **Import from GitHub** button on `/projects` lists the
+user's repositories. Zottin currently imports React JavaScript projects that
+contain `package.json` and `src/App.js` or `src/App.jsx`.
+
 ## Getting Started
 
 First, run the development server:

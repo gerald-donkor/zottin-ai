@@ -17,6 +17,7 @@ import {
   SectionHeading,
   SectionLabel,
 } from "@/components/reusables";
+import { APP_FRAMEWORKS, type AppFramework } from "@/lib/frameworks";
 
 export default function Home() {
   const { isSignedIn, has } = useAuth();
@@ -26,6 +27,7 @@ export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [isFocused, setIsFocused] = useState(false);
+  const [framework, setFramework] = useState<AppFramework>("react");
 
   useEffect(() => {
     if (isFocused || prompt) return;
@@ -44,7 +46,9 @@ export default function Home() {
 
   const handleSubmit = () => {
     if (!prompt.trim() || !isSignedIn) return;
-    router.push(`/workspace?prompt=${encodeURIComponent(prompt.trim())}`);
+    router.push(
+      `/workspace?prompt=${encodeURIComponent(prompt.trim())}&framework=${framework}`
+    );
   };
 
   {
@@ -116,9 +120,20 @@ export default function Home() {
             />
 
             <div className="flex items-center justify-between border-t border-white/6 px-4 py-2.5">
-              <span className="text-xs text-white/20">
-                Press ⏎ to generate · Shift+⏎ for new line
-              </span>
+              <select
+                value={framework}
+                onChange={(event) =>
+                  setFramework(event.target.value as AppFramework)
+                }
+                aria-label="App framework"
+                className="h-8 rounded-md border border-white/8 bg-[#171717] px-2 text-xs text-white/60 outline-none hover:border-white/15"
+              >
+                {APP_FRAMEWORKS.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
 
               {isSignedIn ? (
                 <Button

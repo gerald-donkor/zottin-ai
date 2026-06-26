@@ -33,8 +33,24 @@ model Workspace {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages  Json     @default("[]")
   fileData  Json?
+  githubOwner  String?
+  githubRepo   String?
+  githubBranch String?
+  versions  WorkspaceVersion[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+}
+
+model WorkspaceVersion {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  fileData    Json
+  source      String
+  summary     String?
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId, createdAt])
 }

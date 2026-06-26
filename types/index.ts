@@ -8,6 +8,9 @@ export type {
   StatusStep,
   WorkspaceData,
   WorkspaceUser,
+  WorkspaceVersionSource,
+  WorkspaceVersionSummary,
+  RestoreWorkspaceVersionResult,
 } from "./workspace";
 export type { ProjectSummary } from "./project";
 export type { Plan } from "./plans";

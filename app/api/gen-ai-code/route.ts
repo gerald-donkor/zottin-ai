@@ -4,7 +4,11 @@ import { GoogleGenAI } from "@google/genai";
 import { db } from "@/lib/prisma";
 import { CREDIT_COST_PER_GENERATION } from "@/lib/constants";
 import type { Message, FileData } from "@/types/workspace";
-import { aj } from "@/lib/arcjet";
+import {
+  getFrameworkLabel,
+  isAppFramework,
+  type AppFramework,
+} from "@/lib/frameworks";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
@@ -60,7 +64,17 @@ function trimHistory(messages: Message[]): Message[] {
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are an expert React developer. Your job is to generate complete, working React applications based on user prompts.
+const FRAMEWORK_RULES: Record<AppFramework, string> = {
+  react: `Use React functional components and JavaScript. The entry point must be /App.js and export a default component. Use Tailwind utility classes; Tailwind is loaded by the preview.`,
+  nextjs: `Use Next.js Pages Router with JavaScript. The main page must be /pages/index.js. Include /pages/_app.js and /styles/globals.css. Use standard CSS or CSS modules; do not require Tailwind configuration or a custom server.`,
+  expo: `Use Expo with React Native and JavaScript. The entry point must be /App.js and export a default component. Use only React Native primitives and StyleSheet for UI. Never use DOM elements, browser APIs, Tailwind, or CSS files. Include expo-compatible dependencies only.`,
+  vue: `Use Vue 3 with JavaScript and Vite. Include /src/App.vue, /src/main.js, and /index.html. Use scoped CSS inside Vue components or /src/style.css.`,
+  svelte: `Use Svelte with JavaScript and Vite. Include /src/App.svelte, /src/main.js, and /index.html. Use component styles or /src/app.css.`,
+  vanilla: `Use semantic HTML, modern CSS, and browser JavaScript with Vite. Include /index.html, /src/main.js, and /src/style.css. Do not use React or another UI framework.`,
+};
+
+function systemPrompt(framework: AppFramework): string {
+  return `You are an expert ${getFrameworkLabel(framework)} developer. Generate a complete, working application based on the user's prompt.
 
 RULES:
 1. Always respond with a valid JSON object — no markdown fences, no extra text.
@@ -69,21 +83,22 @@ RULES:
   "assistantMessage": "<brief explanation of what you built/changed>",
   "title": "<short 2-4 word title for the app, e.g. 'Todo List App'>",
   "files": {
-    "/App.js": { "code": "<full file content>" },
-    "/components/SomeComponent.js": { "code": "<full file content>" }
+    "<required entry path for ${getFrameworkLabel(framework)}>": { "code": "<full file content>" },
+    "<other file path>": { "code": "<full file content>" }
   },
   "dependencies": {
     "some-package": "latest"
   }
 }
-3. Use React (functional components + hooks). Do NOT use TypeScript in generated files.
-4. Use Tailwind CSS for all styling. Do not use CSS modules or inline styles unless absolutely necessary.
-5. The entry point must always be /App.js and must export a default component.
-6. All imports must reference files you include in "files" or packages in "dependencies".
-7. Do not include react, react-dom, or tailwindcss in "dependencies" — they are always available.
-8. When modifying existing code, include ALL files (both changed and unchanged) in "files".
-9. Keep code clean, readable, and production-quality.
-10. If the user attaches an image, use it as a design reference and match the layout/style as closely as possible.`;
+3. Do not use TypeScript.
+4. ${FRAMEWORK_RULES[framework]}
+5. All imports must reference files included in "files" or packages in "dependencies".
+6. Do not list framework core packages that the selected template already provides.
+7. When modifying existing code, include ALL files, changed and unchanged.
+8. Keep code clean, readable, responsive, accessible, and production-quality.
+9. If the user attaches an image, use it as a design reference and match it closely.
+10. Never switch away from ${getFrameworkLabel(framework)}.`;
+}
 
 // ─── Gemini contents builder ──────────────────────────────────────────────────
 
@@ -126,16 +141,22 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { workspaceId, userId, messages, fileData } = body as {
+  const { workspaceId, userId, messages, fileData, framework } = body as {
     workspaceId: string | null;
     userId: string;
     messages: Message[];
     fileData: FileData | null;
+    framework?: string;
   };
 
   if (!messages?.length) {
     return Response.json({ message: "No messages provided" }, { status: 400 });
   }
+  const selectedFramework: AppFramework = isAppFramework(fileData?.framework)
+    ? fileData.framework
+    : isAppFramework(framework)
+      ? framework
+      : "react";
 
   // ── Arcjet: rate limit, prompt injection, sensitive info ──────────────────
   // detectPromptInjectionMessage requires the actual user text to inspect.
@@ -186,7 +207,7 @@ export async function POST(request: NextRequest) {
           model: "gemini-3.5-flash",
           contents,
           config: {
-            systemInstruction: SYSTEM_PROMPT,
+            systemInstruction: systemPrompt(selectedFramework),
             temperature: 0.7,
             responseMimeType: "application/json",
             thinkingConfig: {
@@ -267,6 +288,7 @@ export async function POST(request: NextRequest) {
           files,
           dependencies: validatedDeps,
           title: aiTitle,
+          framework: selectedFramework,
         };
 
         // ── Upsert workspace + deduct credit (single transaction) ──────────────
@@ -278,14 +300,23 @@ export async function POST(request: NextRequest) {
           ...messages,
           { role: "assistant", content: assistantMessage },
         ];
+        const newVersionId = crypto.randomUUID();
 
-        const [workspace] = await db.$transaction([
+        const [workspace, updatedUser] = await db.$transaction([
           workspaceId
             ? db.workspace.update({
                 where: { id: workspaceId, userId },
                 data: {
                   messages: updatedMessages as never,
                   fileData: newFileData as never,
+                  versions: {
+                    create: {
+                      id: newVersionId,
+                      fileData: newFileData as never,
+                      source: "generation",
+                      summary: assistantMessage,
+                    },
+                  },
                 },
               })
             : db.workspace.create({
@@ -294,18 +325,25 @@ export async function POST(request: NextRequest) {
                   title: aiTitle ?? lastUserMessage.content.slice(0, 80),
                   messages: updatedMessages as never,
                   fileData: newFileData as never,
+                  versions: {
+                    create: {
+                      id: newVersionId,
+                      fileData: newFileData as never,
+                      source: "generation",
+                      summary: assistantMessage,
+                    },
+                  },
                 },
               }),
           db.user.update({
-            where: { id: userId },
+            where: {
+              id: userId,
+              credits: { gte: CREDIT_COST_PER_GENERATION },
+            },
             data: { credits: { decrement: CREDIT_COST_PER_GENERATION } },
+            select: { credits: true },
           }),
         ]);
-
-        const updatedUser = await db.user.findUnique({
-          where: { id: userId },
-          select: { credits: true },
-        });
 
         // ── Emit final result ──────────────────────────────────────────────────
 
@@ -314,8 +352,8 @@ export async function POST(request: NextRequest) {
             workspaceId: workspace.id,
             assistantMessage,
             fileData: newFileData,
-            creditsRemaining:
-              updatedUser?.credits ?? user.credits - CREDIT_COST_PER_GENERATION,
+            currentVersionId: newVersionId,
+            creditsRemaining: updatedUser.credits,
           })
         );
       } catch (err) {

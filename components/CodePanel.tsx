@@ -10,6 +10,7 @@ import {
   SandpackPreview,
   SandpackFileExplorer,
   useSandpack,
+  type SandpackPredefinedTemplate,
 } from "@codesandbox/sandpack-react";
 import { dracula } from "@codesandbox/sandpack-themes";
 import {
@@ -20,13 +21,18 @@ import {
   Bot,
   Loader2,
   ArrowUp,
+  Check,
 } from "lucide-react";
 import { RingLoader } from "react-spinners";
 import JSZip from "jszip";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PricingModal } from "@/components/PricingModal";
+import { VersionHistory } from "@/components/VersionHistory";
+import { saveWorkspaceFiles } from "@/actions/workspace";
 import type { FileData, StatusStep } from "@/types/workspace";
+import type { AppFramework } from "@/lib/frameworks";
+import { getFrameworkLabel } from "@/lib/frameworks";
 
 // ─── Placeholder ──────────────────────────────────────────────────────────────
 
@@ -76,6 +82,73 @@ const BASE_DEPENDENCIES: Record<string, string> = {
   "tailwind-merge": "latest",
 };
 
+const SANDPACK_TEMPLATES: Record<
+  AppFramework,
+  SandpackPredefinedTemplate
+> = {
+  react: "react",
+  nextjs: "nextjs",
+  expo: "static",
+  vue: "vite-vue",
+  svelte: "vite-svelte",
+  vanilla: "vite",
+};
+
+function baseDependencies(framework: AppFramework): Record<string, string> {
+  if (framework === "react" || framework === "nextjs") {
+    return BASE_DEPENDENCIES;
+  }
+  return {};
+}
+
+function frameworkDependencies(
+  framework: AppFramework,
+  dependencies: Record<string, string>
+): Record<string, string> {
+  const core: Record<AppFramework, Record<string, string>> = {
+    react: {
+      react: "^18.2.0",
+      "react-dom": "^18.2.0",
+      "react-scripts": "5.0.1",
+    },
+    nextjs: {
+      next: "latest",
+      react: "latest",
+      "react-dom": "latest",
+    },
+    expo: {
+      expo: "latest",
+      react: "latest",
+      "react-native": "latest",
+    },
+    vue: { vue: "latest", vite: "latest" },
+    svelte: {
+      svelte: "latest",
+      vite: "latest",
+      "@sveltejs/vite-plugin-svelte": "latest",
+    },
+    vanilla: { vite: "latest" },
+  };
+  return { ...core[framework], ...dependencies };
+}
+
+function frameworkScripts(framework: AppFramework): Record<string, string> {
+  const scripts: Record<AppFramework, Record<string, string>> = {
+    react: { start: "react-scripts start", build: "react-scripts build" },
+    nextjs: { dev: "next dev", build: "next build", start: "next start" },
+    expo: {
+      start: "expo start",
+      android: "expo start --android",
+      ios: "expo start --ios",
+      web: "expo start --web",
+    },
+    vue: { dev: "vite", build: "vite build", preview: "vite preview" },
+    svelte: { dev: "vite", build: "vite build", preview: "vite preview" },
+    vanilla: { dev: "vite", build: "vite build", preview: "vite preview" },
+  };
+  return scripts[framework];
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ActiveTab = "preview" | "code";
@@ -86,10 +159,13 @@ interface CodePanelProps {
   statusLog: StatusStep[];
   onImprove: (userRequest: string) => Promise<void>;
   onFixError: (error: string) => Promise<void>;
-  onFilePatch: (patches: FileData) => void;
   appTitle: string | null;
   isImproving: boolean;
   isProUser: boolean;
+  workspaceId: string | null;
+  currentVersionId: string | null;
+  onVersionRestored: (fileData: FileData, versionId: string) => void;
+  onManualSave: (fileData: FileData, versionId: string) => void;
 }
 
 // ─── SandpackInner ────────────────────────────────────────────────────────────
@@ -108,6 +184,10 @@ function SandpackInner({
   appTitle,
   isImproving,
   isProUser,
+  workspaceId,
+  currentVersionId,
+  onVersionRestored,
+  onManualSave,
 }: {
   isGenerating: boolean;
   statusLog: StatusStep[];
@@ -119,13 +199,21 @@ function SandpackInner({
   appTitle: string | null;
   isImproving: boolean;
   isProUser: boolean;
+  workspaceId: string | null;
+  currentVersionId: string | null;
+  onVersionRestored: (fileData: FileData, versionId: string) => void;
+  onManualSave: (fileData: FileData, versionId: string) => void;
 }) {
   const { sandpack, listen } = useSandpack();
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [improveInput, setImproveInput] = useState("");
   const [showImproveInput, setShowImproveInput] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
   const unsubscribeRef = useRef<(() => void) | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Push file content updates into Sandpack without remounting.
   // This runs whenever fileData changes (e.g. after improve completes).
@@ -143,6 +231,61 @@ function SandpackInner({
     prevFilesRef.current = fileData.files;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileData?.files]);
+
+  useEffect(() => {
+    if (
+      !workspaceId ||
+      !fileData ||
+      isGenerating ||
+      isImproving ||
+      sandpack.editorState !== "dirty"
+    ) {
+      return;
+    }
+
+    const editedFiles = Object.fromEntries(
+      Object.keys(fileData.files).map((path) => [
+        path,
+        { code: sandpack.files[path]?.code ?? fileData.files[path].code },
+      ])
+    );
+    const unchanged = Object.entries(editedFiles).every(
+      ([path, file]) => file.code === fileData.files[path]?.code
+    );
+    if (unchanged) return;
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    setSaveStatus("saving");
+    saveTimerRef.current = setTimeout(async () => {
+      const editedFileData: FileData = {
+        ...fileData,
+        files: editedFiles,
+      };
+      try {
+        const version = await saveWorkspaceFiles(workspaceId, editedFileData);
+        // Mark these files as synchronized before updating parent state. This
+        // prevents a slower save response from overwriting newer editor text.
+        prevFilesRef.current = editedFiles;
+        onManualSave(editedFileData, version.id);
+        setSaveStatus("saved");
+      } catch (error) {
+        console.error("Autosave failed:", error);
+        setSaveStatus("error");
+      }
+    }, 1200);
+
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [
+    fileData,
+    isGenerating,
+    isImproving,
+    onManualSave,
+    sandpack.editorState,
+    sandpack.files,
+    workspaceId,
+  ]);
 
   // Listen for Sandpack runtime errors
   useEffect(() => {
@@ -196,8 +339,9 @@ function SandpackInner({
           ? sandpack.files
           : fileData?.files ?? {};
 
+      const framework = fileData?.framework ?? "react";
       const dependencies = {
-        ...BASE_DEPENDENCIES,
+        ...baseDependencies(framework),
         ...(fileData?.dependencies ?? {}),
       };
 
@@ -207,26 +351,15 @@ function SandpackInner({
         name: "forge-app",
         version: "1.0.0",
         private: true,
-        dependencies: {
-          react: "^18.2.0",
-          "react-dom": "^18.2.0",
-          "react-scripts": "5.0.1",
-          ...dependencies,
-        },
-        scripts: {
-          start: "react-scripts start",
-          build: "react-scripts build",
-        },
-        browserslist: {
-          production: [">0.2%", "not dead", "not op_mini all"],
-          development: ["last 1 chrome version"],
-        },
+        dependencies: frameworkDependencies(framework, dependencies),
+        scripts: frameworkScripts(framework),
       };
       zip.file("package.json", JSON.stringify(packageJson, null, 2));
 
-      zip.file(
-        "public/index.html",
-        `<!DOCTYPE html>
+      if (framework === "react") {
+        zip.file(
+          "public/index.html",
+          `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -238,32 +371,35 @@ function SandpackInner({
     <div id="root"></div>
   </body>
 </html>`
-      );
+        );
+      }
 
       for (const [filePath, fileObj] of Object.entries(filesToZip)) {
         const code =
           typeof fileObj === "object" && fileObj !== null && "code" in fileObj
             ? (fileObj as { code: string }).code
             : "";
-        const zipPath = filePath.startsWith("/")
-          ? `src${filePath}`
-          : `src/${filePath}`;
+        const cleanPath = filePath.replace(/^\//, "");
+        const zipPath =
+          framework === "react" ? `src/${cleanPath}` : cleanPath;
         zip.file(zipPath, code);
       }
 
-      zip.file(
-        "src/index.js",
-        `import React from 'react';
+      if (framework === "react") {
+        zip.file(
+          "src/index.js",
+          `import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<React.StrictMode><App /></React.StrictMode>);`
-      );
+        );
+      }
 
       zip.file(
         "README.md",
-        `# Forge App\n\nGenerated with [Forge](https://forge.app).\n\n## Getting started\n\n\`\`\`bash\nnpm install\nnpm start\n\`\`\``
+        `# ${appTitle || "Zottin App"}\n\nGenerated with Zottin using ${getFrameworkLabel(framework)}.\n\n## Getting started\n\n\`\`\`bash\nnpm install\nnpm run ${framework === "expo" ? "start" : "dev"}\n\`\`\``
       );
 
       const blob = await zip.generateAsync({ type: "blob" });
@@ -312,6 +448,31 @@ root.render(<React.StrictMode><App /></React.StrictMode>);`
         </TabsList>
 
         <div className="flex items-center gap-1.5">
+          {fileData && (
+            <span className="flex min-w-14 items-center justify-end gap-1 text-[10px] text-white/30">
+              {saveStatus === "saving" && (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Saving
+                </>
+              )}
+              {saveStatus === "saved" && (
+                <>
+                  <Check className="h-3 w-3 text-emerald-400/70" />
+                  Saved
+                </>
+              )}
+              {saveStatus === "error" && (
+                <span className="text-red-400/70">Save failed</span>
+              )}
+            </span>
+          )}
+          <VersionHistory
+            workspaceId={workspaceId}
+            currentVersionId={currentVersionId}
+            disabled={isGenerating || isImproving}
+            onRestored={onVersionRestored}
+          />
           {/* ── Improve button ── */}
           {isProUser ? (
             showImproveInput ? (
@@ -423,10 +584,25 @@ root.render(<React.StrictMode><App /></React.StrictMode>);`
             keepMounted
             className="mt-0 h-full w-full"
           >
-            <SandpackPreview
-              style={{ height: "89%" }}
-              showOpenInCodeSandbox={false}
-            />
+            {fileData?.framework === "expo" ? (
+              <div className="flex h-[89%] items-center justify-center bg-[#101010] p-8 text-center">
+                <div className="max-w-sm">
+                  <p className="text-sm font-medium text-white/70">
+                    Expo native preview
+                  </p>
+                  <p className="mt-2 text-xs leading-relaxed text-white/35">
+                    Native iOS and Android previews require Expo Go or an
+                    emulator. Edit the project here, then download and run
+                    <code className="mx-1 text-blue-300/70">npm start</code>.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <SandpackPreview
+                style={{ height: "89%" }}
+                showOpenInCodeSandbox={false}
+              />
+            )}
           </TabsContent>
 
           <TabsContent
@@ -447,7 +623,7 @@ root.render(<React.StrictMode><App /></React.StrictMode>);`
               showLineNumbers
               showInlineErrors
               closableTabs
-              readOnly
+              readOnly={isGenerating || isImproving}
             />
           </TabsContent>
         </SandpackLayout>
@@ -491,33 +667,39 @@ export function CodePanel({
   statusLog,
   onImprove,
   onFixError,
-  onFilePatch: _onFilePatch,
   appTitle,
   isImproving,
   isProUser,
+  workspaceId,
+  currentVersionId,
+  onVersionRestored,
+  onManualSave,
 }: CodePanelProps) {
   const [activeTab, setActiveTab] = useState<ActiveTab>("preview");
 
   useEffect(() => {
-    if (fileData) setActiveTab("preview");
+    if (fileData) {
+      setActiveTab(fileData.framework === "expo" ? "code" : "preview");
+    }
   }, [fileData]);
 
   const files = fileData?.files ?? PLACEHOLDER_FILES;
+  const framework = fileData?.framework ?? "react";
   const dependencies = {
-    ...BASE_DEPENDENCIES,
+    ...baseDependencies(framework),
     ...(fileData?.dependencies ?? {}),
   };
 
   // Key only on file path set — NOT on file contents.
   // Content changes go through sandpack.updateFile() inside SandpackInner.
   // This prevents Sandpack from remounting when only code changes.
-  const filePathKey = Object.keys(files).sort().join("|");
+  const filePathKey = `${framework}:${Object.keys(files).sort().join("|")}`;
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <SandpackProvider
         key={filePathKey}
-        template="react"
+        template={SANDPACK_TEMPLATES[framework]}
         theme={dracula}
         files={files}
         customSetup={{ dependencies }}
@@ -538,6 +720,10 @@ export function CodePanel({
           appTitle={appTitle}
           isImproving={isImproving}
           isProUser={isProUser}
+          workspaceId={workspaceId}
+          currentVersionId={currentVersionId}
+          onVersionRestored={onVersionRestored}
+          onManualSave={onManualSave}
         />
       </SandpackProvider>
     </div>

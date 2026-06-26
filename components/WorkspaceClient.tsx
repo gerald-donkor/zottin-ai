@@ -13,6 +13,7 @@ import type {
   StatusStep,
   WorkspaceData,
 } from "@/types/workspace";
+import type { AppFramework } from "@/lib/frameworks";
 
 export type {
   MessageRole,
@@ -27,6 +28,7 @@ interface WorkspaceClientProps {
   userCredits: number;
   userId: string;
   userPlan: string;
+  initialFramework: AppFramework;
 }
 
 function parseMessages(raw: unknown): Message[] {
@@ -50,6 +52,7 @@ export function WorkspaceClient({
   userCredits,
   userId,
   userPlan,
+  initialFramework,
 }: WorkspaceClientProps) {
   const [workspaceId, setWorkspaceId] = useState<string | null>(
     workspace?.id ?? null
@@ -64,6 +67,9 @@ export function WorkspaceClient({
   const [isGenerating, setIsGenerating] = useState(false);
   const [statusLog, setStatusLog] = useState<StatusStep[]>([]);
   const [isImproving, setIsImproving] = useState(false);
+  const [currentVersionId, setCurrentVersionId] = useState<string | null>(
+    workspace?.versions[0]?.id ?? null
+  );
 
   // AbortController refs — used to cancel in-flight streams
   const generateAbortRef = useRef<AbortController | null>(null);
@@ -138,6 +144,7 @@ export function WorkspaceClient({
             userId,
             messages: conversationHistory,
             fileData: fileDataRef.current,
+            framework: fileDataRef.current?.framework ?? initialFramework,
           }),
         });
 
@@ -166,29 +173,36 @@ export function WorkspaceClient({
 
           for (const line of lines) {
             if (!line.startsWith("data: ")) continue;
+            let event: Record<string, unknown>;
             try {
-              const event = JSON.parse(line.slice(6));
-              if (event.type === "status") {
-                pushStep(event.message);
-              } else if (event.type === "done") {
-                completeSteps();
-                setWorkspaceId(event.workspaceId);
-                setFileData(event.fileData);
-                setCredits(event.creditsRemaining);
-                setMessages((prev) => [
-                  ...prev,
-                  { role: "assistant", content: event.assistantMessage },
-                ]);
-                window.history.replaceState(
-                  null,
-                  "",
-                  `/workspace?id=${event.workspaceId}`
-                );
-              } else if (event.type === "error") {
-                throw new Error(event.message);
-              }
+              event = JSON.parse(line.slice(6)) as Record<string, unknown>;
             } catch {
               // skip malformed SSE lines
+              continue;
+            }
+            if (event.type === "status") {
+              pushStep(String(event.message));
+            } else if (event.type === "done") {
+              completeSteps();
+              setWorkspaceId(String(event.workspaceId));
+              setFileData(event.fileData as FileData);
+              setCurrentVersionId(
+                typeof event.currentVersionId === "string"
+                  ? event.currentVersionId
+                  : null
+              );
+              setCredits(Number(event.creditsRemaining));
+              setMessages((prev) => [
+                ...prev,
+                { role: "assistant", content: String(event.assistantMessage) },
+              ]);
+              window.history.replaceState(
+                null,
+                "",
+                `/workspace?id=${String(event.workspaceId)}`
+              );
+            } else if (event.type === "error") {
+              throw new Error(String(event.message));
             }
           }
         }
@@ -209,8 +223,7 @@ export function WorkspaceClient({
         setStatusLog([]);
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [credits, isGenerating, userId]
+    [credits, initialFramework, isGenerating, userId]
     // fileData intentionally omitted — read via fileDataRef
   );
 
@@ -245,7 +258,6 @@ export function WorkspaceClient({
             userId,
             workspaceId: workspaceIdRef.current,
             userRequest,
-            fileData: currentFileData,
           }),
         });
 
@@ -283,41 +295,50 @@ export function WorkspaceClient({
 
           for (const line of lines) {
             if (!line.startsWith("data: ")) continue;
+            let event: Record<string, unknown>;
             try {
-              const event = JSON.parse(line.slice(6));
-
-              if (event.type === "thinking") {
-                // Stream agent reasoning into the placeholder assistant message
-                accumulatedThinking += event.text;
-                setMessages((prev) => {
-                  const updated = [...prev];
-                  updated[updated.length - 1] = {
-                    role: "assistant",
-                    content: accumulatedThinking,
-                  };
-                  return updated;
-                });
-              } else if (event.type === "file_patch") {
-                // Accumulate locally — don't touch state yet
-                localPatches[event.path] = { code: event.code };
-              } else if (event.type === "done") {
-                // Apply all patches at once now that the stream is complete
-                setFileData(event.fileData);
-                setCredits(event.creditsRemaining);
-                // Replace thinking text with clean summary
-                setMessages((prev) => {
-                  const updated = [...prev];
-                  updated[updated.length - 1] = {
-                    role: "assistant",
-                    content: event.summary,
-                  };
-                  return updated;
-                });
-              } else if (event.type === "error") {
-                throw new Error(event.message);
-              }
+              event = JSON.parse(line.slice(6)) as Record<string, unknown>;
             } catch {
               // skip malformed SSE lines
+              continue;
+            }
+
+            if (event.type === "thinking") {
+              // Stream agent reasoning into the placeholder assistant message
+              accumulatedThinking += String(event.text);
+              setMessages((prev) => {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  role: "assistant",
+                  content: accumulatedThinking,
+                };
+                return updated;
+              });
+            } else if (
+              event.type === "file_patch" &&
+              typeof event.path === "string"
+            ) {
+              localPatches[event.path] = { code: String(event.code) };
+            } else if (event.type === "done") {
+              // Apply all patches at once now that the stream is complete
+              setFileData(event.fileData as FileData);
+              setCurrentVersionId(
+                typeof event.currentVersionId === "string"
+                  ? event.currentVersionId
+                  : null
+              );
+              setCredits(Number(event.creditsRemaining));
+              // Replace thinking text with clean summary
+              setMessages((prev) => {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  role: "assistant",
+                  content: String(event.summary),
+                };
+                return updated;
+              });
+            } else if (event.type === "error") {
+              throw new Error(String(event.message));
             }
           }
         }
@@ -335,7 +356,6 @@ export function WorkspaceClient({
       }
     },
     // fileData intentionally omitted — read via fileDataRef above
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [credits, isGenerating, isImproving, userId]
   );
 
@@ -345,9 +365,21 @@ export function WorkspaceClient({
     improveAbortRef.current?.abort();
   }, []);
 
-  const handleFilePatch = useCallback((patches: FileData) => {
-    setFileData(patches);
-  }, []);
+  const handleVersionRestored = useCallback(
+    (restoredFileData: FileData, versionId: string) => {
+      setFileData(restoredFileData);
+      setCurrentVersionId(versionId);
+    },
+    []
+  );
+
+  const handleManualSave = useCallback(
+    (savedFileData: FileData, versionId: string) => {
+      setFileData(savedFileData);
+      setCurrentVersionId(versionId);
+    },
+    []
+  );
 
   return (
     <>
@@ -382,10 +414,13 @@ export function WorkspaceClient({
               `There is an error in the preview:\n\n\`\`\`\n${error}\n\`\`\`\n\nPlease fix it.`
             )
           }
-          onFilePatch={handleFilePatch}
           appTitle={fileData?.title ?? workspace?.title ?? null}
           isImproving={isImproving}
           isProUser={userPlan === "pro"}
+          workspaceId={workspaceId}
+          currentVersionId={currentVersionId}
+          onVersionRestored={handleVersionRestored}
+          onManualSave={handleManualSave}
         />
       </div>
     </>
