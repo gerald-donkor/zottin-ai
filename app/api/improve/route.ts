@@ -19,15 +19,17 @@ function sseEvent(type: string, payload: object): string {
 
 const IMPROVE_RULES: Record<AppFramework, string> = {
   react:
-    'Use React functional components, JavaScript, Tailwind, and /App.js as the entry point. Framer Motion is available from "framer-motion" for animation.',
+    'Use React 19 functional components, JavaScript, Tailwind 4, and /App.js. Motion, Framer Motion, GSAP, and the official @gsap/react useGSAP hook are available. Animate UI components must be implemented as complete local source under /components/animate-ui, never imported from an @animate-ui package.',
   nextjs:
-    'Use the Next.js Pages Router with JavaScript, /pages/index.js, and CSS or CSS modules. Framer Motion is available from "framer-motion" for client-rendered animation.',
+    'Use the Next.js Pages Router with React 19, JavaScript, /pages/index.js, and Tailwind 4 or CSS. Motion, Framer Motion, GSAP, and @gsap/react are available in browser-rendered components. Animate UI components must be complete local source files, never @animate-ui package imports.',
   expo:
     "Use Expo, React Native primitives, JavaScript, StyleSheet, and /App.js. Do not use DOM elements or CSS.",
-  vue: "Use Vue 3, JavaScript, Vite, and /src/App.vue.",
-  svelte: "Use Svelte, JavaScript, Vite, and /src/App.svelte.",
+  vue:
+    "Use Vue 3, JavaScript, Vite, and /src/App.vue. GSAP is available; scope animations and revert their context on unmount.",
+  svelte:
+    "Use Svelte, JavaScript, Vite, and /src/App.svelte. GSAP is available; clean up animation contexts with onDestroy.",
   vanilla:
-    "Use semantic HTML, modern CSS, browser JavaScript, and the existing Vite file structure.",
+    "Use semantic HTML, modern CSS, browser JavaScript, and the existing Vite file structure. GSAP is available for advanced animation.",
 };
 
 // ─── Route ────────────────────────────────────────────────────────────────────
@@ -173,6 +175,8 @@ WORKFLOW:
 RULES:
 - Always write complete file contents — never partial snippets.
 - Keep all existing functionality unless asked to remove it.
+- For GSAP in React, prefer useGSAP with scoped refs and register plugins explicitly so cleanup and tree-shaking are correct.
+- Respect prefers-reduced-motion and do not stack multiple animation libraries on the same interaction without a reason.
 - Preserve the framework's existing entry point and conventions.
 - All imports must reference existing files or declared dependencies.`,
         tools: [updateFileTool, doneImprovingTool],

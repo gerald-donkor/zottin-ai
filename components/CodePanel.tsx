@@ -67,6 +67,15 @@ const BASE_DEPENDENCIES: Record<string, string> = {
   recharts: "latest",
   "date-fns": "latest",
   "framer-motion": "latest",
+  motion: "latest",
+  gsap: "latest",
+  "@gsap/react": "latest",
+  "@base-ui/react": "latest",
+  tailwindcss: "latest",
+  "@tailwindcss/postcss": "latest",
+  postcss: "latest",
+  react: "latest",
+  "react-dom": "latest",
   "react-hook-form": "latest",
   "@hookform/resolvers": "latest",
   zod: "latest",
@@ -98,6 +107,13 @@ function baseDependencies(framework: AppFramework): Record<string, string> {
   if (framework === "react" || framework === "nextjs") {
     return BASE_DEPENDENCIES;
   }
+  if (
+    framework === "vue" ||
+    framework === "svelte" ||
+    framework === "vanilla"
+  ) {
+    return { gsap: "latest" };
+  }
   return {};
 }
 
@@ -107,8 +123,8 @@ function frameworkDependencies(
 ): Record<string, string> {
   const core: Record<AppFramework, Record<string, string>> = {
     react: {
-      react: "^18.2.0",
-      "react-dom": "^18.2.0",
+      react: "latest",
+      "react-dom": "latest",
       "react-scripts": "5.0.1",
     },
     nextjs: {
@@ -365,7 +381,7 @@ function SandpackInner({
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Forge App</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   </head>
   <body>
     <div id="root"></div>
@@ -704,7 +720,9 @@ export function CodePanel({
         files={files}
         customSetup={{ dependencies }}
         options={{
-          externalResources: ["https://cdn.tailwindcss.com"],
+          externalResources: [
+            "https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4",
+          ],
           recompileMode: "delayed",
           recompileDelay: 500,
         }}

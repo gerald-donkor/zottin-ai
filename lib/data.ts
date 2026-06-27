@@ -38,7 +38,7 @@ export const FEATURES = [
   {
     icon: Zap,
     label: "Motion-ready interfaces",
-    desc: "React and Next.js projects include Framer Motion for polished transitions, gestures, and responsive UI animation.",
+    desc: "React and Next.js include Motion, Framer Motion, GSAP with useGSAP, and source-generated Animate UI components for polished interaction.",
   },
   {
     icon: ImageIcon,
