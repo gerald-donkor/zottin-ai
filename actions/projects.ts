@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/prisma";
 import type { ProjectSummary } from "@/types/project";
+import { isAppFramework } from "@/lib/frameworks";
 
 export type { ProjectSummary } from "@/types/project";
 
@@ -28,6 +29,7 @@ export async function getUserProjects(): Promise<ProjectSummary[]> {
       createdAt: true,
       updatedAt: true,
       messages: true,
+      fileData: true,
     },
     orderBy: { updatedAt: "desc" },
   });
@@ -48,6 +50,13 @@ export async function getUserProjects(): Promise<ProjectSummary[]> {
       createdAt: w.createdAt,
       updatedAt: w.updatedAt,
       messageCount: Array.isArray(w.messages) ? w.messages.length : 0,
+      framework:
+        w.fileData &&
+        typeof w.fileData === "object" &&
+        "framework" in w.fileData &&
+        isAppFramework(w.fileData.framework)
+          ? w.fileData.framework
+          : "react",
     };
   });
 }

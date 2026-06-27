@@ -1,3 +1,5 @@
+import type { AppFramework } from "@/lib/frameworks";
+
 // ─── Project Types ────────────────────────────────────────────────────────────
 
 export interface ProjectSummary {
@@ -7,4 +9,5 @@ export interface ProjectSummary {
   updatedAt: Date;
   messageCount: number;
   firstPrompt: string | null;
+  framework: AppFramework;
 }

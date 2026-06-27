@@ -5,6 +5,7 @@ import { formatDistanceToNow } from "date-fns";
 import { Trash2, MessageSquare } from "lucide-react";
 import { ProjectSummary } from "@/actions/projects";
 import { DeleteProjectModal } from "./DeleteProjectModal";
+import { getFrameworkLabel } from "@/lib/frameworks";
 
 interface ProjectCardProps {
   projects: ProjectSummary[];
@@ -33,9 +34,14 @@ export function ProjectCard({ projects }: ProjectCardProps) {
 
             {/* Top row */}
             <div className="mb-2 flex items-start justify-between gap-2">
-              <p className="line-clamp-1 text-sm font-medium leading-snug text-white/80">
-                {title}
-              </p>
+              <div className="min-w-0">
+                <p className="line-clamp-1 text-sm font-medium leading-snug text-white/80">
+                  {title}
+                </p>
+                <span className="mt-1 inline-block rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[9px] font-medium text-blue-300/70">
+                  {getFrameworkLabel(project.framework)}
+                </span>
+              </div>
               <DeleteProjectModal project={project}>
                 <span className="relative z-10 text-white/20 hover:text-red-400">
                   <Trash2 className="h-3.5 w-3.5" />

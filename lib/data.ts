@@ -13,12 +13,12 @@ export const FEATURES = [
   {
     icon: Zap,
     label: "Instant generation",
-    desc: "Describe your app in plain English. Gemini 3.5 Flash returns production-ready React + Tailwind code in seconds.",
+    desc: "Describe your app and choose React, Next.js, Expo, Vue, Svelte, or vanilla JavaScript. AI generates the right project structure.",
   },
   {
     icon: Eye,
     label: "Live preview",
-    desc: "Your app renders instantly in the browser via Sandpack. No install, no build step — just a working preview.",
+    desc: "Web apps render instantly through the matching Sandpack runtime. Expo projects export for Expo Go and native emulators.",
   },
   {
     icon: Code2,
@@ -51,7 +51,7 @@ export const STEPS = [
   {
     number: "02",
     label: "AI generates code",
-    desc: "Gemini writes React + Tailwind components, picks dependencies, and structures your files.",
+    desc: "Gemini follows the selected framework, creates its entry points, picks dependencies, and structures the project.",
   },
   {
     number: "03",
