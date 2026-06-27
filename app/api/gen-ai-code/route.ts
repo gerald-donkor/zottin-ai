@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextRequest } from "next/server";
-import { GoogleGenAI } from "@google/genai";
+import { ApiError, GoogleGenAI } from "@google/genai";
 import { db } from "@/lib/prisma";
 import { CREDIT_COST_PER_GENERATION } from "@/lib/constants";
 import type { Message, FileData } from "@/types/workspace";
@@ -16,6 +16,30 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
 function sseEvent(type: string, payload: unknown): string {
   return `data: ${JSON.stringify({ type, ...(payload as object) })}\n\n`;
+}
+
+function generationErrorMessage(error: unknown, phase: string): string {
+  if (error instanceof ApiError) {
+    if (error.status === 429) {
+      return "Gemini usage is temporarily limited. Wait a moment and try again.";
+    }
+    if (error.status === 401 || error.status === 403) {
+      return "Gemini authentication failed. Check the server API key and permissions.";
+    }
+    if (error.status >= 500) {
+      return "Gemini is temporarily unavailable. Please try again shortly.";
+    }
+    if (error.status === 400) {
+      return "Gemini rejected this generation request. Try a shorter prompt or fewer attached files.";
+    }
+  }
+  if (phase === "saving") {
+    return "The app was generated, but it could not be saved. Please try again.";
+  }
+  if (phase === "validating") {
+    return "The app was generated, but its packages could not be validated.";
+  }
+  return "Generation failed unexpectedly. Please try again.";
 }
 
 // ─── Extract short label from a Gemini thought chunk ─────────────────────────
@@ -194,11 +218,13 @@ export async function POST(request: NextRequest) {
   }
 
   const encoder = new TextEncoder();
+  const requestId = crypto.randomUUID().slice(0, 8);
 
   const stream = new ReadableStream({
     async start(controller) {
       const enqueue = (chunk: string) =>
         controller.enqueue(encoder.encode(chunk));
+      let phase = "generating";
 
       try {
         const contents = buildContents(messages, fileData);
@@ -251,15 +277,16 @@ export async function POST(request: NextRequest) {
           dependencies: Record<string, string>;
         };
 
+        phase = "parsing";
         try {
           parsed = JSON.parse(accumulated);
         } catch {
           enqueue(
             sseEvent("error", {
               message: "AI returned invalid JSON. Please try again.",
+              requestId,
             })
           );
-          controller.close();
           return;
         }
 
@@ -274,14 +301,15 @@ export async function POST(request: NextRequest) {
           enqueue(
             sseEvent("error", {
               message: "AI response missing files. Please try again.",
+              requestId,
             })
           );
-          controller.close();
           return;
         }
 
         // ── Validate npm packages ──────────────────────────────────────────────
 
+        phase = "validating";
         enqueue(sseEvent("status", { message: "Validating packages…" }));
         const validatedDeps = await validateDependencies(dependencies ?? {});
         const newFileData: FileData = {
@@ -293,6 +321,7 @@ export async function POST(request: NextRequest) {
 
         // ── Upsert workspace + deduct credit (single transaction) ──────────────
 
+        phase = "saving";
         enqueue(sseEvent("status", { message: "Saving…" }));
 
         const lastUserMessage = messages[messages.length - 1];
@@ -357,10 +386,15 @@ export async function POST(request: NextRequest) {
           })
         );
       } catch (err) {
-        console.error("[gen-ai-code] stream error:", err);
+        console.error("[gen-ai-code] stream error", {
+          requestId,
+          phase,
+          error: err,
+        });
         enqueue(
           sseEvent("error", {
-            message: "Something went wrong. Please try again.",
+            message: generationErrorMessage(err, phase),
+            requestId,
           })
         );
       } finally {
