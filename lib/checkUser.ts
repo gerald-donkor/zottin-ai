@@ -2,6 +2,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { db } from "./prisma";
 import { PLANS } from "./constants";
 import type { Plan } from "@/types/plans";
+import { unstable_rethrow } from "next/navigation";
 
 const getCurrentPlan = async (): Promise<Plan> => {
   const { has } = await auth();
@@ -11,10 +12,10 @@ const getCurrentPlan = async (): Promise<Plan> => {
 };
 
 export const checkUser = async () => {
-  const user = await currentUser();
-  if (!user) return null;
-
   try {
+    const user = await currentUser();
+    if (!user) return null;
+
     const currentPlan = await getCurrentPlan();
 
     const existing = await db.user.findUnique({
@@ -60,6 +61,13 @@ export const checkUser = async () => {
       },
     });
   } catch (error) {
+    unstable_rethrow(error);
+    if (
+      error instanceof Error &&
+      error.message.includes("clerk.com/err/auth-middleware")
+    ) {
+      return null;
+    }
     console.error("checkUser error:", error);
     return null;
   }

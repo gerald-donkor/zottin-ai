@@ -50,6 +50,18 @@ function generationErrorMessage(error: unknown, phase: string): string {
   return "Generation failed unexpectedly. Please try again.";
 }
 
+function isTransientGeminiError(error: unknown): boolean {
+  return (
+    error instanceof ApiError && (error.status === 429 || error.status === 503)
+  );
+}
+
+function retryDelay(attempt: number): Promise<void> {
+  return new Promise((resolve) =>
+    setTimeout(resolve, 750 * Math.pow(2, attempt))
+  );
+}
+
 // ─── Extract short label from a Gemini thought chunk ─────────────────────────
 // Gemini thoughts often start with a bold heading like **Verify Config**
 // We extract that. If no bold heading, take the first sentence only.
@@ -293,18 +305,53 @@ export async function POST(request: NextRequest) {
         phase = "generating";
         const contents = buildContents(messages, fileData, research);
 
-        const geminiStream = await ai.models.generateContentStream({
-          model: "gemini-3.5-flash",
-          contents,
-          config: {
-            systemInstruction: systemPrompt(selectedFramework),
-            temperature: 0.7,
-            responseMimeType: "application/json",
-            thinkingConfig: {
-              includeThoughts: true,
-            },
-          },
-        });
+        const modelAttempts = [
+          "gemini-3.5-flash",
+          "gemini-3.5-flash",
+          "gemini-3.1-flash-lite",
+        ] as const;
+        let geminiStream: Awaited<
+          ReturnType<typeof ai.models.generateContentStream>
+        > | null = null;
+
+        for (let attempt = 0; attempt < modelAttempts.length; attempt++) {
+          const model = modelAttempts[attempt];
+          try {
+            geminiStream = await ai.models.generateContentStream({
+              model,
+              contents,
+              config: {
+                systemInstruction: systemPrompt(selectedFramework),
+                temperature: 0.7,
+                responseMimeType: "application/json",
+                thinkingConfig: {
+                  includeThoughts: true,
+                },
+              },
+            });
+            break;
+          } catch (generationError) {
+            const canRetry =
+              isTransientGeminiError(generationError) &&
+              attempt < modelAttempts.length - 1;
+            if (!canRetry) throw generationError;
+
+            const switchingModel =
+              modelAttempts[attempt + 1] !== modelAttempts[attempt];
+            enqueue(
+              sseEvent("status", {
+                message: switchingModel
+                  ? "Primary AI is busy; switching to Flash-Lite…"
+                  : "AI service is busy; retrying…",
+              })
+            );
+            await retryDelay(attempt);
+          }
+        }
+
+        if (!geminiStream) {
+          throw new Error("No generation model was available.");
+        }
 
         let accumulated = ""; // final JSON output
         let lastEmitTime = 0; // throttle thought emissions
