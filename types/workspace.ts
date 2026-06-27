@@ -15,6 +15,19 @@ export interface FileData {
   dependencies: Record<string, string>;
   title?: string;
   framework?: AppFramework;
+  research?: ProjectResearch;
+}
+
+export interface ResearchSource {
+  title: string;
+  url: string;
+}
+
+export interface ProjectResearch {
+  summary: string;
+  sources: ResearchSource[];
+  queries: string[];
+  researchedAt: string;
 }
 
 export interface StatusStep {
