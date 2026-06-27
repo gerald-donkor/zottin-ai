@@ -51,11 +51,18 @@ export async function POST(request: NextRequest) {
     return Response.json({ message: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
-  const { userId, workspaceId, userRequest } = body as {
+  const { userId, workspaceId, workspaceUpdatedAt, userRequest } = body as {
     userId: string;
     workspaceId: string;
+    workspaceUpdatedAt: string;
     userRequest: string; // what the user wants improved
   };
+  if (!workspaceUpdatedAt) {
+    return Response.json(
+      { message: "Workspace revision is required" },
+      { status: 400 }
+    );
+  }
 
   // ── Auth + credit check ────────────────────────────────────────────────────
 
@@ -96,8 +103,11 @@ export async function POST(request: NextRequest) {
 
   const stream = new ReadableStream({
     async start(controller) {
-      const enqueue = (chunk: string) =>
-        controller.enqueue(encoder.encode(chunk));
+      const enqueue = (chunk: string) => {
+        if (!request.signal.aborted) {
+          controller.enqueue(encoder.encode(chunk));
+        }
+      };
 
       // Accumulate file patches as the agent calls update_file
       const patchedFiles: Record<string, { code: string }> = {
@@ -116,6 +126,7 @@ export async function POST(request: NextRequest) {
           request: userRequest,
           framework,
           fileData,
+          signal: request.signal,
         });
         enqueue(
           sseEvent("thinking", {
@@ -270,6 +281,7 @@ RULES:
         enqueue(sseEvent("status", { message: "Cline agent starting…" }));
 
         const result = await agent.run(userRequest);
+        request.signal.throwIfAborted();
 
         if (result.status === "failed") {
           throw new Error(result.error?.message ?? "Agent run failed");
@@ -302,31 +314,51 @@ RULES:
         ];
         const newVersionId = crypto.randomUUID();
 
-        const [, updatedUser] = await db.$transaction([
-          db.workspace.update({
-            where: { id: workspaceId, userId },
+        const { updatedUser, updatedAt } = await db.$transaction(async (tx) => {
+          request.signal.throwIfAborted();
+          const update = await tx.workspace.updateMany({
+            where: {
+              id: workspaceId,
+              userId,
+              updatedAt: new Date(workspaceUpdatedAt),
+            },
             data: {
               fileData: newFileData as never,
               messages: updatedMessages as never,
-              versions: {
-                create: {
-                  id: newVersionId,
-                  fileData: newFileData as never,
-                  source: "improvement",
-                  summary: summaryWithSources,
-                },
-              },
             },
-          }),
-          db.user.update({
+          });
+          if (update.count !== 1) {
+            throw new Error(
+              "Workspace changed in another tab. Reload and try again."
+            );
+          }
+          await tx.workspaceVersion.create({
+            data: {
+              id: newVersionId,
+              workspaceId,
+              fileData: newFileData as never,
+              source: "improvement",
+              summary: summaryWithSources,
+            },
+          });
+          request.signal.throwIfAborted();
+          const updatedUser = await tx.user.update({
             where: {
               id: userId,
               credits: { gte: CREDIT_COST_PER_GENERATION },
             },
             data: { credits: { decrement: CREDIT_COST_PER_GENERATION } },
             select: { credits: true },
-          }),
-        ]);
+          });
+          const savedWorkspace = await tx.workspace.findUniqueOrThrow({
+            where: { id: workspaceId },
+            select: { updatedAt: true },
+          });
+          return {
+            updatedUser,
+            updatedAt: savedWorkspace.updatedAt.toISOString(),
+          };
+        });
 
         // ── Final done event ──────────────────────────────────────────────
 
@@ -335,10 +367,12 @@ RULES:
             fileData: newFileData,
             summary: summaryWithSources,
             currentVersionId: newVersionId,
+            workspaceUpdatedAt: updatedAt,
             creditsRemaining: updatedUser.credits,
           })
         );
       } catch (err) {
+        if (request.signal.aborted) return;
         console.error("[improve] error:", err);
         enqueue(
           sseEvent("error", {
@@ -347,7 +381,7 @@ RULES:
           })
         );
       } finally {
-        controller.close();
+        if (!request.signal.aborted) controller.close();
       }
     },
   });

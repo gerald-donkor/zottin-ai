@@ -70,6 +70,9 @@ export function WorkspaceClient({
   const [currentVersionId, setCurrentVersionId] = useState<string | null>(
     workspace?.versions[0]?.id ?? null
   );
+  const [workspaceUpdatedAt, setWorkspaceUpdatedAt] = useState<string | null>(
+    workspace?.updatedAt.toISOString() ?? null
+  );
 
   // AbortController refs — used to cancel in-flight streams
   const generateAbortRef = useRef<AbortController | null>(null);
@@ -141,6 +144,7 @@ export function WorkspaceClient({
           signal: abortController.signal,
           body: JSON.stringify({
             workspaceId: currentWorkspaceId,
+            workspaceUpdatedAt,
             userId,
             messages: conversationHistory,
             fileData: fileDataRef.current,
@@ -192,6 +196,7 @@ export function WorkspaceClient({
                   : null
               );
               setCredits(Number(event.creditsRemaining));
+              setWorkspaceUpdatedAt(String(event.workspaceUpdatedAt));
               setMessages((prev) => [
                 ...prev,
                 { role: "assistant", content: String(event.assistantMessage) },
@@ -222,7 +227,7 @@ export function WorkspaceClient({
         setStatusLog([]);
       }
     },
-    [credits, initialFramework, isGenerating, userId]
+    [credits, initialFramework, isGenerating, userId, workspaceUpdatedAt]
     // fileData intentionally omitted — read via fileDataRef
   );
 
@@ -256,13 +261,14 @@ export function WorkspaceClient({
           body: JSON.stringify({
             userId,
             workspaceId: workspaceIdRef.current,
+            workspaceUpdatedAt,
             userRequest,
           }),
         });
 
         if (res.status === 403) {
           toast.error(
-            "Upgrade to Starter or Pro to use Improve with Forge Agent."
+            "Upgrade to Pro to use Improve with Forge Agent."
           );
           setMessages((prev) => prev.slice(0, -2));
           return;
@@ -327,6 +333,7 @@ export function WorkspaceClient({
                   : null
               );
               setCredits(Number(event.creditsRemaining));
+              setWorkspaceUpdatedAt(String(event.workspaceUpdatedAt));
               // Replace thinking text with clean summary
               setMessages((prev) => {
                 const updated = [...prev];
@@ -355,7 +362,7 @@ export function WorkspaceClient({
       }
     },
     // fileData intentionally omitted — read via fileDataRef above
-    [credits, isGenerating, isImproving, userId]
+    [credits, isGenerating, isImproving, userId, workspaceUpdatedAt]
   );
 
   // Cancel whichever stream is currently in-flight
@@ -365,17 +372,23 @@ export function WorkspaceClient({
   }, []);
 
   const handleVersionRestored = useCallback(
-    (restoredFileData: FileData, versionId: string) => {
+    (
+      restoredFileData: FileData,
+      versionId: string,
+      updatedAt?: string
+    ) => {
       setFileData(restoredFileData);
       setCurrentVersionId(versionId);
+      if (updatedAt) setWorkspaceUpdatedAt(updatedAt);
     },
     []
   );
 
   const handleManualSave = useCallback(
-    (savedFileData: FileData, versionId: string) => {
+    (savedFileData: FileData, versionId: string, updatedAt: string) => {
       setFileData(savedFileData);
       setCurrentVersionId(versionId);
+      setWorkspaceUpdatedAt(updatedAt);
     },
     []
   );
@@ -417,6 +430,7 @@ export function WorkspaceClient({
           isImproving={isImproving}
           isProUser={userPlan === "pro"}
           workspaceId={workspaceId}
+          workspaceUpdatedAt={workspaceUpdatedAt}
           currentVersionId={currentVersionId}
           onVersionRestored={handleVersionRestored}
           onManualSave={handleManualSave}

@@ -32,13 +32,16 @@ export async function getWorkspaceUser(): Promise<WorkspaceUser> {
 // ─── Get a workspace by id (must belong to the current user) ─────────────────
 
 export async function getWorkspaceById(
-  workspaceId: string,
-  userId: string
+  workspaceId: string
 ): Promise<WorkspaceData> {
+  const { userId: clerkId } = await auth();
+  if (!clerkId) redirect("/");
+
   const workspace = await db.workspace.findUnique({
-    where: { id: workspaceId, userId },
+    where: { id: workspaceId, user: { clerkId } },
     select: {
       id: true,
+      updatedAt: true,
       title: true,
       messages: true,
       fileData: true,
@@ -124,9 +127,10 @@ export async function restoreWorkspaceVersion(
       throw new Error("Version not found");
     }
 
-    await tx.workspace.update({
+    const workspace = await tx.workspace.update({
       where: { id: workspaceId, user: { clerkId } },
       data: { fileData: version.fileData },
+      select: { updatedAt: true },
     });
 
     const restoredVersion = await tx.workspaceVersion.create({
@@ -142,35 +146,51 @@ export async function restoreWorkspaceVersion(
     return {
       fileData: version.fileData as unknown as FileData,
       version: toVersionSummary(restoredVersion),
+      workspaceUpdatedAt: workspace.updatedAt.toISOString(),
     };
   });
 }
 
 export async function saveWorkspaceFiles(
   workspaceId: string,
-  fileData: FileData
-): Promise<WorkspaceVersionSummary> {
+  fileData: FileData,
+  expectedUpdatedAt: string
+): Promise<WorkspaceVersionSummary & { workspaceUpdatedAt: string }> {
   const { userId: clerkId } = await auth();
   if (!clerkId) throw new Error("Unauthorized");
   if (!isFileData(fileData)) throw new Error("Invalid project files");
 
-  const versionId = crypto.randomUUID();
-  const [, version] = await db.$transaction([
-    db.workspace.update({
-      where: { id: workspaceId, user: { clerkId } },
+  const version = await db.$transaction(async (tx) => {
+    const update = await tx.workspace.updateMany({
+      where: {
+        id: workspaceId,
+        user: { clerkId },
+        updatedAt: new Date(expectedUpdatedAt),
+      },
       data: { fileData: fileData as never },
-    }),
-    db.workspaceVersion.create({
+    });
+    if (update.count !== 1) {
+      throw new Error("Workspace changed elsewhere. Reload before saving.");
+    }
+
+    const created = await tx.workspaceVersion.create({
       data: {
-        id: versionId,
         workspaceId,
         fileData: fileData as never,
         source: "edit",
         summary: "Saved code edits",
       },
       select: { id: true, source: true, summary: true, createdAt: true },
-    }),
-  ]);
+    });
+    const workspace = await tx.workspace.findUniqueOrThrow({
+      where: { id: workspaceId },
+      select: { updatedAt: true },
+    });
+    return { created, workspaceUpdatedAt: workspace.updatedAt.toISOString() };
+  });
 
-  return toVersionSummary(version);
+  return {
+    ...toVersionSummary(version.created),
+    workspaceUpdatedAt: version.workspaceUpdatedAt,
+  };
 }

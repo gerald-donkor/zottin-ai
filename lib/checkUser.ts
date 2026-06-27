@@ -36,8 +36,8 @@ export const checkUser = async () => {
             plan: currentPlan,
             credits:
               creditDelta > 0
-                ? existing.credits + creditDelta
-                : existing.credits,
+                ? { increment: creditDelta }
+                : undefined,
           },
         });
 

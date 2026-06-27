@@ -27,7 +27,11 @@ interface VersionHistoryProps {
   workspaceId: string | null;
   currentVersionId: string | null;
   disabled?: boolean;
-  onRestored: (fileData: FileData, versionId: string) => void;
+  onRestored: (
+    fileData: FileData,
+    versionId: string,
+    workspaceUpdatedAt: string
+  ) => void;
 }
 
 const SOURCE_LABELS: Record<WorkspaceVersionSummary["source"], string> = {
@@ -75,7 +79,11 @@ export function VersionHistory({
       );
       setVersions((previous) => [result.version, ...previous]);
       setPendingVersion(null);
-      onRestored(result.fileData, result.version.id);
+      onRestored(
+        result.fileData,
+        result.version.id,
+        result.workspaceUpdatedAt
+      );
       toast.success("Version restored.");
     } catch (error) {
       toast.error(

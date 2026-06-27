@@ -38,6 +38,7 @@ export interface StatusStep {
 
 export interface WorkspaceData {
   id: string;
+  updatedAt: Date;
   title: string | null;
   messages: unknown;
   fileData: unknown;
@@ -70,4 +71,5 @@ export interface WorkspaceVersionSummary {
 export interface RestoreWorkspaceVersionResult {
   fileData: FileData;
   version: WorkspaceVersionSummary;
+  workspaceUpdatedAt: string;
 }

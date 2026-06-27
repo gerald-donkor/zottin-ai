@@ -15,7 +15,7 @@ export default async function WorkspacePage({
 
   let workspace = null;
   if (id) {
-    workspace = await getWorkspaceById(id, user.id);
+    workspace = await getWorkspaceById(id);
   }
 
   return (

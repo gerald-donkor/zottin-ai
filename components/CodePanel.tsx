@@ -180,9 +180,14 @@ interface CodePanelProps {
   isImproving: boolean;
   isProUser: boolean;
   workspaceId: string | null;
+  workspaceUpdatedAt: string | null;
   currentVersionId: string | null;
   onVersionRestored: (fileData: FileData, versionId: string) => void;
-  onManualSave: (fileData: FileData, versionId: string) => void;
+  onManualSave: (
+    fileData: FileData,
+    versionId: string,
+    workspaceUpdatedAt: string
+  ) => void;
 }
 
 // ─── SandpackInner ────────────────────────────────────────────────────────────
@@ -202,6 +207,7 @@ function SandpackInner({
   isImproving,
   isProUser,
   workspaceId,
+  workspaceUpdatedAt,
   currentVersionId,
   onVersionRestored,
   onManualSave,
@@ -217,9 +223,14 @@ function SandpackInner({
   isImproving: boolean;
   isProUser: boolean;
   workspaceId: string | null;
+  workspaceUpdatedAt: string | null;
   currentVersionId: string | null;
   onVersionRestored: (fileData: FileData, versionId: string) => void;
-  onManualSave: (fileData: FileData, versionId: string) => void;
+  onManualSave: (
+    fileData: FileData,
+    versionId: string,
+    workspaceUpdatedAt: string
+  ) => void;
 }) {
   const { sandpack, listen } = useSandpack();
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -252,6 +263,7 @@ function SandpackInner({
   useEffect(() => {
     if (
       !workspaceId ||
+      !workspaceUpdatedAt ||
       !fileData ||
       isGenerating ||
       isImproving ||
@@ -279,11 +291,19 @@ function SandpackInner({
         files: editedFiles,
       };
       try {
-        const version = await saveWorkspaceFiles(workspaceId, editedFileData);
+        const version = await saveWorkspaceFiles(
+          workspaceId,
+          editedFileData,
+          workspaceUpdatedAt
+        );
         // Mark these files as synchronized before updating parent state. This
         // prevents a slower save response from overwriting newer editor text.
         prevFilesRef.current = editedFiles;
-        onManualSave(editedFileData, version.id);
+        onManualSave(
+          editedFileData,
+          version.id,
+          version.workspaceUpdatedAt
+        );
         setSaveStatus("saved");
       } catch (error) {
         console.error("Autosave failed:", error);
@@ -302,6 +322,7 @@ function SandpackInner({
     sandpack.editorState,
     sandpack.files,
     workspaceId,
+    workspaceUpdatedAt,
   ]);
 
   // Listen for Sandpack runtime errors
@@ -689,6 +710,7 @@ export function CodePanel({
   isImproving,
   isProUser,
   workspaceId,
+  workspaceUpdatedAt,
   currentVersionId,
   onVersionRestored,
   onManualSave,
@@ -741,6 +763,7 @@ export function CodePanel({
           isImproving={isImproving}
           isProUser={isProUser}
           workspaceId={workspaceId}
+          workspaceUpdatedAt={workspaceUpdatedAt}
           currentVersionId={currentVersionId}
           onVersionRestored={onVersionRestored}
           onManualSave={onManualSave}

@@ -35,11 +35,13 @@ export async function researchProject({
   request,
   framework,
   fileData,
+  signal,
 }: {
   ai: GoogleGenAI;
   request: string;
   framework: AppFramework;
   fileData: FileData | null;
+  signal?: AbortSignal;
 }): Promise<ProjectResearch> {
   const projectContext = fileData
     ? JSON.stringify(
@@ -75,6 +77,7 @@ RESEARCH REQUIREMENTS:
 - If a claim cannot be verified, label it as uncertain instead of guessing.
 - The current date is ${new Date().toISOString().slice(0, 10)}.`,
     config: {
+      abortSignal: signal,
       tools: [{ googleSearch: {} }, { urlContext: {} }],
       temperature: 0.2,
     },

@@ -184,8 +184,16 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { workspaceId, userId, messages, fileData, framework } = body as {
+  const {
+    workspaceId,
+    workspaceUpdatedAt,
+    userId,
+    messages,
+    fileData,
+    framework,
+  } = body as {
     workspaceId: string | null;
+    workspaceUpdatedAt: string | null;
     userId: string;
     messages: Message[];
     fileData: FileData | null;
@@ -194,6 +202,12 @@ export async function POST(request: NextRequest) {
 
   if (!messages?.length) {
     return Response.json({ message: "No messages provided" }, { status: 400 });
+  }
+  if (workspaceId && !workspaceUpdatedAt) {
+    return Response.json(
+      { message: "Workspace revision is required" },
+      { status: 400 }
+    );
   }
   const selectedFramework: AppFramework = isAppFramework(fileData?.framework)
     ? fileData.framework
@@ -241,8 +255,11 @@ export async function POST(request: NextRequest) {
 
   const stream = new ReadableStream({
     async start(controller) {
-      const enqueue = (chunk: string) =>
-        controller.enqueue(encoder.encode(chunk));
+      const enqueue = (chunk: string) => {
+        if (!request.signal.aborted) {
+          controller.enqueue(encoder.encode(chunk));
+        }
+      };
       let phase = "generating";
 
       try {
@@ -262,6 +279,7 @@ export async function POST(request: NextRequest) {
             request: lastRequest,
             framework: selectedFramework,
             fileData,
+            signal: request.signal,
           });
           enqueue(
             sseEvent("status", {
@@ -297,6 +315,7 @@ export async function POST(request: NextRequest) {
           model: "gemini-3.5-flash",
           contents,
           config: {
+            abortSignal: request.signal,
             systemInstruction: systemPrompt(selectedFramework),
             temperature: 0.7,
             responseMimeType: "application/json",
@@ -388,6 +407,7 @@ export async function POST(request: NextRequest) {
 
         phase = "saving";
         enqueue(sseEvent("status", { message: "Saving…" }));
+        request.signal.throwIfAborted();
 
         const lastUserMessage = messages[messages.length - 1];
         const assistantMessageWithSources =
@@ -398,24 +418,42 @@ export async function POST(request: NextRequest) {
         ];
         const newVersionId = crypto.randomUUID();
 
-        const [workspace, updatedUser] = await db.$transaction([
-          workspaceId
-            ? db.workspace.update({
-                where: { id: workspaceId, userId },
+        const { workspace, updatedUser } = await db.$transaction(async (tx) => {
+          request.signal.throwIfAborted();
+
+          let workspace: { id: string; updatedAt: Date };
+          if (workspaceId) {
+            const update = await tx.workspace.updateMany({
+                where: {
+                  id: workspaceId,
+                  userId,
+                  updatedAt: new Date(workspaceUpdatedAt!),
+                },
                 data: {
                   messages: updatedMessages as never,
                   fileData: newFileData as never,
-                  versions: {
-                    create: {
-                      id: newVersionId,
-                      fileData: newFileData as never,
-                      source: "generation",
-                      summary: assistantMessageWithSources,
-                    },
-                  },
                 },
-              })
-            : db.workspace.create({
+              });
+            if (update.count !== 1) {
+              throw new Error(
+                "Workspace changed in another tab. Reload and try again."
+              );
+            }
+            await tx.workspaceVersion.create({
+              data: {
+                id: newVersionId,
+                workspaceId,
+                fileData: newFileData as never,
+                source: "generation",
+                summary: assistantMessageWithSources,
+              },
+            });
+            workspace = await tx.workspace.findUniqueOrThrow({
+              where: { id: workspaceId },
+              select: { id: true, updatedAt: true },
+            });
+          } else {
+            workspace = await tx.workspace.create({
                 data: {
                   userId,
                   title: aiTitle ?? lastUserMessage.content.slice(0, 80),
@@ -430,16 +468,21 @@ export async function POST(request: NextRequest) {
                     },
                   },
                 },
-              }),
-          db.user.update({
+                select: { id: true, updatedAt: true },
+              });
+          }
+
+          request.signal.throwIfAborted();
+          const updatedUser = await tx.user.update({
             where: {
               id: userId,
               credits: { gte: CREDIT_COST_PER_GENERATION },
             },
             data: { credits: { decrement: CREDIT_COST_PER_GENERATION } },
             select: { credits: true },
-          }),
-        ]);
+          });
+          return { workspace, updatedUser };
+        });
 
         // ── Emit final result ──────────────────────────────────────────────────
 
@@ -449,10 +492,12 @@ export async function POST(request: NextRequest) {
             assistantMessage: assistantMessageWithSources,
             fileData: newFileData,
             currentVersionId: newVersionId,
+            workspaceUpdatedAt: workspace.updatedAt.toISOString(),
             creditsRemaining: updatedUser.credits,
           })
         );
       } catch (err) {
+        if (request.signal.aborted) return;
         console.error("[gen-ai-code] stream error", {
           requestId,
           phase,
@@ -465,7 +510,7 @@ export async function POST(request: NextRequest) {
           })
         );
       } finally {
-        controller.close();
+        if (!request.signal.aborted) controller.close();
       }
     },
   });
