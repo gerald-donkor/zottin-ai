@@ -19,9 +19,9 @@ function sseEvent(type: string, payload: object): string {
 
 const IMPROVE_RULES: Record<AppFramework, string> = {
   react:
-    "Use React functional components, JavaScript, Tailwind, and /App.js as the entry point.",
+    'Use React functional components, JavaScript, Tailwind, and /App.js as the entry point. Framer Motion is available from "framer-motion" for animation.',
   nextjs:
-    "Use the Next.js Pages Router with JavaScript, /pages/index.js, and CSS or CSS modules.",
+    'Use the Next.js Pages Router with JavaScript, /pages/index.js, and CSS or CSS modules. Framer Motion is available from "framer-motion" for client-rendered animation.',
   expo:
     "Use Expo, React Native primitives, JavaScript, StyleSheet, and /App.js. Do not use DOM elements or CSS.",
   vue: "Use Vue 3, JavaScript, Vite, and /src/App.vue.",

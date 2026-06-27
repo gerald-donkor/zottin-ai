@@ -36,6 +36,11 @@ export const FEATURES = [
     desc: "When your preview throws an error, a banner appears. One click sends the error to AI and auto-fixes the code.",
   },
   {
+    icon: Zap,
+    label: "Motion-ready interfaces",
+    desc: "React and Next.js projects include Framer Motion for polished transitions, gestures, and responsive UI animation.",
+  },
+  {
     icon: ImageIcon,
     label: "Image-aware prompts",
     desc: "Attach screenshots or mockups to your prompt. The AI reads them and generates code that matches your design.",

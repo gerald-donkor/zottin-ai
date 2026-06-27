@@ -65,8 +65,8 @@ function trimHistory(messages: Message[]): Message[] {
 // ─── System prompt ────────────────────────────────────────────────────────────
 
 const FRAMEWORK_RULES: Record<AppFramework, string> = {
-  react: `Use React functional components and JavaScript. The entry point must be /App.js and export a default component. Use Tailwind utility classes; Tailwind is loaded by the preview.`,
-  nextjs: `Use Next.js Pages Router with JavaScript. The main page must be /pages/index.js. Include /pages/_app.js and /styles/globals.css. Use standard CSS or CSS modules; do not require Tailwind configuration or a custom server.`,
+  react: `Use React functional components and JavaScript. The entry point must be /App.js and export a default component. Use Tailwind utility classes; Tailwind is loaded by the preview. Framer Motion is preinstalled as "framer-motion"; use it for purposeful animations when the request calls for motion, transitions, or interactive polish.`,
+  nextjs: `Use Next.js Pages Router with JavaScript. The main page must be /pages/index.js. Include /pages/_app.js and /styles/globals.css. Use standard CSS or CSS modules; do not require Tailwind configuration or a custom server. Framer Motion is preinstalled as "framer-motion"; use it in client-rendered components when animation is requested.`,
   expo: `Use Expo with React Native and JavaScript. The entry point must be /App.js and export a default component. Use only React Native primitives and StyleSheet for UI. Never use DOM elements, browser APIs, Tailwind, or CSS files. Include expo-compatible dependencies only.`,
   vue: `Use Vue 3 with JavaScript and Vite. Include /src/App.vue, /src/main.js, and /index.html. Use scoped CSS inside Vue components or /src/style.css.`,
   svelte: `Use Svelte with JavaScript and Vite. Include /src/App.svelte, /src/main.js, and /index.html. Use component styles or /src/app.css.`,
