@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PricingModal } from "@/components/PricingModal";
 import { VersionHistory } from "@/components/VersionHistory";
+import { ResearchPanel } from "@/components/ResearchPanel";
 import { saveWorkspaceFiles } from "@/actions/workspace";
 import type { FileData, StatusStep } from "@/types/workspace";
 import type { AppFramework } from "@/lib/frameworks";
@@ -483,6 +484,7 @@ root.render(<React.StrictMode><App /></React.StrictMode>);`
               )}
             </span>
           )}
+          <ResearchPanel research={fileData?.research} />
           <VersionHistory
             workspaceId={workspaceId}
             currentVersionId={currentVersionId}

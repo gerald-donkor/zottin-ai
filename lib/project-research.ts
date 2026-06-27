@@ -113,6 +113,8 @@ RESEARCH REQUIREMENTS:
       candidate?.groundingMetadata?.webSearchQueries ?? []
     ).slice(0, 10),
     researchedAt: new Date().toISOString(),
+    searchEntryHtml:
+      candidate?.groundingMetadata?.searchEntryPoint?.renderedContent,
   };
 }
 

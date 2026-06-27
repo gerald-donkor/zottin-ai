@@ -28,6 +28,7 @@ export interface ProjectResearch {
   sources: ResearchSource[];
   queries: string[];
   researchedAt: string;
+  searchEntryHtml?: string;
 }
 
 export interface StatusStep {
