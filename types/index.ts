@@ -11,6 +11,8 @@ export type {
   WorkspaceVersionSource,
   WorkspaceVersionSummary,
   RestoreWorkspaceVersionResult,
+  ResearchSource,
+  ProjectResearch,
 } from "./workspace";
 export type { ProjectSummary } from "./project";
 export type { Plan } from "./plans";

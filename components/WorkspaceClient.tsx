@@ -212,7 +212,6 @@ export function WorkspaceClient({
           setMessages((prev) => prev.slice(0, -1));
           return;
         }
-        console.error(err);
         toast.error(
           err instanceof Error ? err.message : "Something went wrong."
         );
