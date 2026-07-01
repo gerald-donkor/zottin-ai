@@ -583,7 +583,7 @@ export default function Home() {
       </section>
 
       <footer className="relative z-10 border-t border-white/7 py-12 mx-auto px-6 flex flex-wrap items-center justify-center text-stone-400">
-        Made with ❤️ by Gerald Donkor
+        © {new Date().getFullYear()} Zottin. All rights reserved.
       </footer>
     </main>
   );
