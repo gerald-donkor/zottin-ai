@@ -47,7 +47,7 @@ export default function Home() {
   const handleSubmit = () => {
     if (!prompt.trim() || !isSignedIn) return;
     router.push(
-      `/workspace?prompt=${encodeURIComponent(prompt.trim())}&framework=${framework}`
+      `/workspace?prompt=${encodeURIComponent(prompt.trim())}&framework=${framework}`,
     );
   };
 
@@ -194,7 +194,9 @@ export default function Home() {
             </div>
 
             <div className="mx-auto flex h-6 w-64 items-center justify-center rounded-md bg-white/5 px-3">
-              <span className="text-xs text-white/25">zottin.app/workspace</span>
+              <span className="text-xs text-white/25">
+                zottin.app/workspace
+              </span>
             </div>
           </div>
 
@@ -381,8 +383,8 @@ export default function Home() {
               ? has?.({ plan: "pro" })
                 ? "pro"
                 : has?.({ plan: "starter" })
-                ? "starter"
-                : "free"
+                  ? "starter"
+                  : "free"
               : null;
 
             const isActive = isSignedIn && activePlanKey === plan.key;
@@ -399,7 +401,7 @@ export default function Home() {
                   "relative flex flex-col rounded-2xl border p-7 transition-colors",
                   plan.featured
                     ? "border-blue-500/25 bg-blue-500/4"
-                    : "border-white/8 bg-[#0f0f0f]"
+                    : "border-white/8 bg-[#0f0f0f]",
                 )}
               >
                 {/* Most popular pill */}
@@ -452,13 +454,13 @@ export default function Home() {
                       <div
                         className={cn(
                           "flex h-4 w-4 shrink-0 items-center justify-center rounded-full",
-                          plan.featured ? "bg-blue-500/15" : "bg-white/8"
+                          plan.featured ? "bg-blue-500/15" : "bg-white/8",
                         )}
                       >
                         <Check
                           className={cn(
                             "h-2.5 w-2.5",
-                            plan.featured ? "text-blue-400" : "text-white/50"
+                            plan.featured ? "text-blue-400" : "text-white/50",
                           )}
                         />
                       </div>
@@ -516,7 +518,7 @@ export default function Home() {
                           "w-full rounded-full text-sm font-semibold transition-all",
                           plan.featured
                             ? "bg-blue-500 text-white hover:bg-blue-400 active:scale-95"
-                            : "border border-white/10 bg-transparent text-white/60 hover:bg-white/6 hover:text-white/90"
+                            : "border border-white/10 bg-transparent text-white/60 hover:bg-white/6 hover:text-white/90",
                         )}
                         variant="ghost"
                       >
@@ -531,7 +533,7 @@ export default function Home() {
                           "w-full rounded-full text-sm font-semibold transition-all",
                           plan.featured
                             ? "bg-blue-500 text-white hover:bg-blue-400 active:scale-95"
-                            : "border border-white/10 bg-transparent text-white/60 hover:bg-white/6 hover:text-white/90"
+                            : "border border-white/10 bg-transparent text-white/60 hover:bg-white/6 hover:text-white/90",
                         )}
                         variant="ghost"
                       >
@@ -582,8 +584,9 @@ export default function Home() {
         </SignInButton>
       </section>
 
-      <footer className="relative z-10 border-t border-white/7 py-12 mx-auto px-6 flex flex-wrap items-center justify-center text-stone-400">
-        © {new Date().getFullYear()} Zottin. All rights reserved.
+      <footer className="relative z-10 border-t border-white/7 py-12 mx-auto px-6 flex flex-wrap items-center justify-center gap-1 text-stone-400">
+        <div>© {new Date().getFullYear()} Zottin.</div>
+        <div className="text-blue">All rights reserved.</div>
       </footer>
     </main>
   );
